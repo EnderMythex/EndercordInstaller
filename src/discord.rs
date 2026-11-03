@@ -116,6 +116,28 @@ pub fn find_all() -> Vec<DiscordInstall> {
         .collect()
 }
 
+/// Closing Discord from outside skips its normal shutdown, where it saves the login token back,
+/// so a forced close logs you out. Used to ask the user to quit Discord themselves first.
+#[cfg(target_os = "windows")]
+pub fn is_running(di: &DiscordInstall) -> bool {
+    use std::os::windows::process::CommandExt;
+    let Some((_, name)) = WINDOWS_NAMES.iter().find(|(b, _)| *b == di.branch) else {
+        return false;
+    };
+    let exe = format!("{name}.exe");
+    std::process::Command::new("tasklist")
+        .args(["/FI", &format!("IMAGENAME eq {exe}"), "/NH"])
+        .creation_flags(0x0800_0000)
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains(&exe))
+}
+
+/// Only Windows locks app.asar while Discord runs, so other platforms never need to close it.
+#[cfg(not(target_os = "windows"))]
+pub fn is_running(_: &DiscordInstall) -> bool {
+    false
+}
+
 /// Discord keeps app.asar open, so it has to be closed before we can rename it.
 #[cfg(target_os = "windows")]
 pub fn prepare(di: &DiscordInstall) {

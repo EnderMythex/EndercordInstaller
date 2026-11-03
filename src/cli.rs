@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use clap::Parser;
-use dialoguer::{Input, Select};
+use dialoguer::{Confirm, Input, Select};
 
 use crate::constants::{GIT_HASH, REPO, SUPPORT_URL, TAG};
 use crate::discord::{self, DiscordInstall};
@@ -201,6 +201,23 @@ pub fn run() {
         Action::Uninstall => "unpatch",
     };
     let mut di = pick_discord(verb, &args, interactive);
+
+    if discord::is_running(&di) {
+        if !interactive {
+            crate::warn!("Discord is open and will be force closed, which logs you out. Quit it from the tray icon first to stay logged in.");
+        } else {
+            while discord::is_running(&di) {
+                let force = Confirm::new()
+                    .with_prompt("Discord is open. Quit it from the tray icon (right click, Quit Discord) to stay logged in, then press n. Force close it now and get logged out?")
+                    .default(false)
+                    .interact()
+                    .unwrap_or_else(|_| exit(0));
+                if force {
+                    break;
+                }
+            }
+        }
+    }
 
     let result = match action {
         Action::Install => patcher::patch(&mut di),

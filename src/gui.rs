@@ -22,7 +22,7 @@ const PEACH: Color32 = Color32::from_rgb(0xe2, 0xb4, 0x8f);
 const TEXT: Color32 = Color32::from_rgb(0xec, 0xeb, 0xff);
 const RED: Color32 = Color32::from_rgb(0xc0, 0x3a, 0x4a);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Action {
     Install,
     Repair,
@@ -47,6 +47,8 @@ struct App {
     shared: Arc<Mutex<Shared>>,
     busy: Arc<AtomicBool>,
     rescan: Arc<AtomicBool>,
+    /// Action waiting for the user to quit Discord, so it isn't force closed.
+    confirm: Option<Action>,
 }
 
 fn load_icon() -> (Vec<u8>, u32, u32) {
@@ -119,6 +121,7 @@ impl App {
             shared,
             busy: Arc::new(AtomicBool::new(false)),
             rescan: Arc::new(AtomicBool::new(false)),
+            confirm: None,
         };
         app.scan();
         app
@@ -128,6 +131,14 @@ impl App {
         self.installs = discord::find_all();
         self.openasar = self.installs.iter().map(openasar::is_installed).collect();
         self.selected = self.selected.min(self.installs.len().saturating_sub(1));
+    }
+
+    fn request(&mut self, ctx: &egui::Context, action: Action) {
+        if self.installs.get(self.selected).is_some_and(discord::is_running) {
+            self.confirm = Some(action);
+        } else {
+            self.run(ctx, action);
+        }
     }
 
     fn run(&self, ctx: &egui::Context, action: Action) {
@@ -235,17 +246,17 @@ impl App {
                     .add(button(if patched { "Reinstall" } else { "Install" }, ACCENT))
                     .clicked()
                 {
-                    self.run(ui.ctx(), Action::Install);
+                    self.request(ui.ctx(), Action::Install);
                 }
                 if ui
                     .add(button("Repair", CARD))
                     .on_hover_text("Download the latest build and reinstall")
                     .clicked()
                 {
-                    self.run(ui.ctx(), Action::Repair);
+                    self.request(ui.ctx(), Action::Repair);
                 }
                 if ui.add_enabled(patched, button("Uninstall", RED)).clicked() {
-                    self.run(ui.ctx(), Action::Uninstall);
+                    self.request(ui.ctx(), Action::Uninstall);
                 }
             });
             ui.horizontal(|ui| {
@@ -259,7 +270,7 @@ impl App {
                     .on_hover_text("OpenAsar makes Discord start faster")
                     .clicked()
                 {
-                    self.run(ui.ctx(), action);
+                    self.request(ui.ctx(), action);
                 }
                 if ui.add(button("Refresh", CARD)).clicked() {
                     self.scan();
@@ -267,10 +278,31 @@ impl App {
             });
         });
 
+        if let Some(action) = self.confirm {
+            egui::Frame::group(ui.style()).fill(CARD).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.colored_label(PEACH, "Discord is still open.");
+                ui.label("Quit it from the tray icon (right click, Quit Discord) so it saves your login. Force closing it logs you out.");
+                ui.horizontal(|ui| {
+                    if ui.add(button("Continue", ACCENT)).clicked() {
+                        self.confirm = None;
+                        self.request(ui.ctx(), action);
+                    }
+                    if ui.add(button("Force Close", RED)).clicked() {
+                        self.confirm = None;
+                        self.run(ui.ctx(), action);
+                    }
+                    if ui.add(button("Cancel", CARD)).clicked() {
+                        self.confirm = None;
+                    }
+                });
+            });
+        }
+
         if busy {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("Working, Discord will be closed if it's running...");
+                ui.label("Working...");
             });
         }
     }
