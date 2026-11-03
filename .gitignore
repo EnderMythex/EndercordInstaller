@@ -1,8 +1,4 @@
-PawsomeVencordInstaller
-vencord
-*.exe
-*.syso
+/target
 *.old
-vendor
-build
+*.new
 .DS_Store

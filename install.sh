@@ -7,7 +7,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 if grep -q "CHROMEOS_RELEASE_NAME" /etc/lsb-release 2>/dev/null; then
-	echo "ChromeOS is not supported! Use the chrome extension. https://chromewebstore.google.com/detail/equicord-web/mcambpfmpjnncfoodejdmehedbkjepmi"
+	echo "ChromeOS is not supported! Use the web extension instead. https://github.com/EnderMythex/Endercord"
 	exit 1
 fi
 
@@ -19,11 +19,11 @@ echo "Downloading Installer..."
 set -- "XDG_CONFIG_HOME=$XDG_CONFIG_HOME"
 
 case "$(uname -m)" in
-  aarch64|arm64) binary="PawsomeVencordInstallerCli-linux-arm64" ;;
-  *) binary="PawsomeVencordInstallerCli-linux" ;;
+  aarch64|arm64) binary="EndercordInstallerCli-linux-arm64" ;;
+  *) binary="EndercordInstallerCli-linux" ;;
 esac
 
-curl -sS "https://github.com/enzomtpYT/PawsomeVencordInstaller/releases/latest/download/$binary" \
+curl -sS "https://github.com/EnderMythex/EndercordInstaller/releases/latest/download/$binary" \
   --output "$outfile" \
   --location \
   --fail

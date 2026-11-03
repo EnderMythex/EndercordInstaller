@@ -1,6 +1,6 @@
-$link = "https://github.com/enzomtpYT/PawsomeVencordInstaller/releases/latest/download/PawsomeVencordInstallerCli.exe"
+$link = "https://github.com/EnderMythex/EndercordInstaller/releases/latest/download/EndercordInstallerCli.exe"
 
-$outfile = "$env:TEMP\PawsomeVencordInstallerCli.exe"
+$outfile = "$env:TEMP\EndercordInstallerCli.exe"
 
 Write-Output "Downloading installer to $outfile"
 

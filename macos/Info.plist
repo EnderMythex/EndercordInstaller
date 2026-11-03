@@ -2,19 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
     <dict>
+        <key>CFBundleName</key>
+        <string>EnderCord Installer</string>
+
         <key>CFBundleExecutable</key>
-        <string>PawsomeVencordInstaller</string>
+        <string>EndercordInstaller</string>
 
         <key>CFBundleIconFile</key>
         <string>icon.icns</string>
 
         <key>CFBundleIdentifier</key>
-        <string>com.thororen.PawsomeVencordInstaller</string>
+        <string>com.endermythex.EndercordInstaller</string>
+
+        <key>CFBundlePackageType</key>
+        <string>APPL</string>
+
+        <key>LSMinimumSystemVersion</key>
+        <string>10.13</string>
 
         <key>NSHighResolutionCapable</key>
-        <true/>
-
-        <key>LSUIElement</key>
         <true/>
     </dict>
 </plist>
