@@ -40,6 +40,7 @@ jobs:
 
     macos:
         runs-on: macos-latest
+        timeout-minutes: 30
         env:
             MACOSX_DEPLOYMENT_TARGET: "10.13"
         steps:
@@ -97,6 +98,8 @@ jobs:
 
     release:
         needs: [windows, macos, linux]
+        # GitHub's macOS runners are sometimes unavailable for a while; don't hold the whole release back for them
+        if: ${{ always() && needs.windows.result == 'success' && needs.linux.result == 'success' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/download-artifact@v4
