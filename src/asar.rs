@@ -37,7 +37,11 @@ pub fn write_loader(out_file: &Path, target: &Path) -> io::Result<()> {
 }
 
 /// True when the asar at `path` is a loader written by us (or the Vencord/Equicord installers).
+/// EnderCord itself re-patches Discord updates with an `app.asar` folder holding an index.js instead of a file.
 pub fn is_loader(path: &Path) -> io::Result<bool> {
+    if path.is_dir() {
+        return Ok(fs::read_to_string(path.join("index.js"))?.contains("require("));
+    }
     if fs::metadata(path)?.len() > 128 * 1024 {
         return Ok(false);
     }
@@ -68,5 +72,14 @@ mod tests {
             br#"require("/tmp/endercord.asar")"#
         );
         assert!(bytes.ends_with(PACKAGE_JSON.as_bytes()));
+    }
+
+    #[test]
+    fn detects_folder_loader() {
+        let dir = std::env::temp_dir().join(format!("endercord-shim-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("index.js"), r#"require("/x/endercord.asar/patcher.js");"#).unwrap();
+        assert!(is_loader(&dir).unwrap());
+        fs::remove_dir_all(dir).unwrap();
     }
 }

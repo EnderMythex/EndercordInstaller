@@ -85,7 +85,11 @@ fn unpatch_dir(dir: &Path, system_electron: bool) -> Result<(), String> {
 
     match &result {
         Ok(()) => {
-            let _ = fs::remove_file(&tmp_asar);
+            let _ = if tmp_asar.is_dir() {
+                fs::remove_dir_all(&tmp_asar)
+            } else {
+                fs::remove_file(&tmp_asar)
+            };
         }
         Err(_) => {
             crate::error!("Unpatching failed, undoing changes");
