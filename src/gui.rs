@@ -48,6 +48,8 @@ struct App {
     shared: Arc<Mutex<Shared>>,
     busy: Arc<AtomicBool>,
     rescan: Arc<AtomicBool>,
+    /// Set once an action succeeded, to offer opening Discord.
+    finished: Arc<AtomicBool>,
     /// Action waiting for the user to quit Discord, so it isn't force closed.
     confirm: Option<Action>,
 }
@@ -66,7 +68,9 @@ fn style(ctx: &egui::Context) {
     visuals.window_fill = BG;
     visuals.extreme_bg_color = BG;
     visuals.override_text_color = Some(TEXT);
-    visuals.selection.bg_fill = Color32::WHITE;
+    visuals.selection.bg_fill = Color32::from_white_alpha(56);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, TEXT);
+    visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     visuals.hyperlink_color = MUTED;
     for w in [
         &mut visuals.widgets.inactive,
@@ -88,6 +92,7 @@ fn style(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
     style.spacing.item_spacing = Vec2::new(8.0, 8.0);
     style.spacing.button_padding = Vec2::new(16.0, 8.0);
+    style.interaction.selectable_labels = false;
     ctx.set_style(style);
 }
 
@@ -192,6 +197,7 @@ impl App {
             shared,
             busy: Arc::new(AtomicBool::new(false)),
             rescan: Arc::new(AtomicBool::new(false)),
+            finished: Arc::new(AtomicBool::new(false)),
             confirm: None,
         };
         app.scan();
@@ -218,8 +224,14 @@ impl App {
             Some(Ok(r)) => Some(r.clone()),
             _ => None,
         };
-        let (busy, rescan, ctx) = (self.busy.clone(), self.rescan.clone(), ctx.clone());
+        let (busy, rescan, finished, ctx) = (
+            self.busy.clone(),
+            self.rescan.clone(),
+            self.finished.clone(),
+            ctx.clone(),
+        );
         busy.store(true, Ordering::SeqCst);
+        finished.store(false, Ordering::SeqCst);
 
         thread::spawn(move || {
             let result = match (action, di.as_mut()) {
@@ -240,7 +252,15 @@ impl App {
                 (Action::UninstallOpenAsar, Some(di)) => openasar::uninstall(di),
             };
             match result {
-                Ok(()) => crate::info!("Done! Restart Discord to see the changes."),
+                Ok(()) if action == Action::UpdateSelf => crate::info!("Done! Restart the installer."),
+                Ok(()) => {
+                    finished.store(true, Ordering::SeqCst);
+                    match di.as_ref().map(discord::launch) {
+                        Some(Ok(())) => crate::info!("Done! Starting Discord..."),
+                        Some(Err(e)) => crate::warn!("Done! {e}"),
+                        None => {}
+                    }
+                }
                 Err(e) => crate::error!("{e}"),
             }
             rescan.store(true, Ordering::SeqCst);
@@ -397,31 +417,44 @@ impl App {
         });
 
         if let Some(action) = self.confirm {
-            egui::Frame::default()
-                .fill(GLASS)
-                .stroke(egui::Stroke::new(1.0_f32, AMBER.gamma_multiply(0.5)))
-                .corner_radius(14.0)
-                .inner_margin(14)
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.label(RichText::new("Discord is still open").strong().color(AMBER));
-                    ui.label(
-                        RichText::new("Quit it from the tray icon (right click, Quit Discord) so it saves your login. Force closing it logs you out.")
-                            .size(12.0)
-                            .color(MUTED),
-                    );
-                    ui.horizontal(|ui| {
-                        if ui.add(glass_button("Continue")).clicked() {
+            egui::Modal::new(egui::Id::new("discord-open"))
+                .backdrop_color(Color32::from_black_alpha(170))
+                .frame(
+                    egui::Frame::default()
+                        .fill(Color32::from_rgb(0x16, 0x16, 0x18))
+                        .stroke(egui::Stroke::new(1.0_f32, LINE))
+                        .corner_radius(18.0)
+                        .inner_margin(22),
+                )
+                .show(ui.ctx(), |ui| {
+                    ui.set_width(320.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(RichText::new("Discord is still open").size(17.0).strong());
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new("Quit it from the tray icon (right click, Quit Discord) so it keeps you logged in. Force closing it logs you out.")
+                                .size(12.0)
+                                .color(MUTED),
+                        );
+                        ui.add_space(12.0);
+                        let primary = egui::Button::new(RichText::new("I Quit It, Continue").strong().color(BG))
+                            .fill(Color32::WHITE)
+                            .corner_radius(18.0);
+                        if ui.add_sized([ui.available_width(), 36.0], primary).clicked() {
                             self.confirm = None;
                             self.request(ui.ctx(), action);
                         }
-                        if ui.add(egui::Button::new(RichText::new("Force Close").size(13.0).color(RED))).clicked() {
-                            self.confirm = None;
-                            self.run(ui.ctx(), action);
-                        }
-                        if ui.add(glass_button("Cancel")).clicked() {
-                            self.confirm = None;
-                        }
+                        ui.columns(2, |cols| {
+                            let size = [cols[0].available_width(), 32.0];
+                            let force = egui::Button::new(RichText::new("Force Close").size(13.0).color(RED));
+                            if cols[0].add_sized(size, force).clicked() {
+                                self.confirm = None;
+                                self.run(cols[0].ctx(), action);
+                            }
+                            if cols[1].add_sized(size, glass_button("Cancel")).clicked() {
+                                self.confirm = None;
+                            }
+                        });
                     });
                 });
         }
@@ -438,6 +471,15 @@ impl App {
                     _ => MUTED,
                 };
                 ui.label(RichText::new(msg).size(12.0).color(color));
+                if self.finished.load(Ordering::SeqCst) {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(glass_button("Open Discord")).clicked() {
+                            if let Some(Err(e)) = self.installs.get(self.selected).map(discord::launch) {
+                                crate::warn!("{e}");
+                            }
+                        }
+                    });
+                }
             }
         });
     }

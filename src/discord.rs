@@ -335,6 +335,65 @@ pub fn find_all() -> Vec<DiscordInstall> {
 #[cfg(target_os = "linux")]
 pub fn prepare(_: &DiscordInstall) {}
 
+/// Starts Discord again after patching, the same way its own shortcut does.
+#[cfg(target_os = "windows")]
+pub fn launch(di: &DiscordInstall) -> Result<(), String> {
+    let (_, name) = WINDOWS_NAMES
+        .iter()
+        .find(|(b, _)| *b == di.branch)
+        .ok_or("Unknown Discord branch")?;
+    std::process::Command::new(di.path.join("Update.exe"))
+        .args(["--processStart", &format!("{name}.exe")])
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("Couldn't start Discord: {e}"))
+}
+
+#[cfg(target_os = "macos")]
+pub fn launch(di: &DiscordInstall) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(&di.path)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("Couldn't start Discord: {e}"))
+}
+
+#[cfg(target_os = "linux")]
+pub fn launch(di: &DiscordInstall) -> Result<(), String> {
+    use std::process::Command;
+
+    // Patching system installs needs sudo, and Discord must not run as root.
+    if unsafe { libc::geteuid() } == 0 {
+        return Err("Start Discord yourself, the installer is running as root.".into());
+    }
+
+    let path = di.path.to_string_lossy();
+    if let Some(id) = path.split('/').find(|e| e.starts_with("com.discordapp")) {
+        return Command::new("flatpak")
+            .args(["run", id])
+            .spawn()
+            .map(drop)
+            .map_err(|e| format!("Couldn't start Discord: {e}"));
+    }
+
+    let exe = [
+        "Discord",
+        "DiscordCanary",
+        "DiscordPTB",
+        "discord",
+        "discord-canary",
+        "discord-ptb",
+    ]
+    .iter()
+    .map(|n| di.path.join(n))
+    .find(|p| p.is_file())
+    .ok_or("Couldn't find Discord's executable, start it yourself.")?;
+    Command::new(exe)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("Couldn't start Discord: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

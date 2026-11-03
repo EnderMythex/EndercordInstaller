@@ -233,8 +233,12 @@ pub fn run() {
         Action::UninstallOpenAsar => openasar::uninstall(&di),
     };
 
-    if let Err(e) = &result {
-        crate::error!("{e}");
+    match &result {
+        Err(e) => crate::error!("{e}"),
+        Ok(()) => match discord::launch(&di) {
+            Ok(()) => crate::info!("Starting Discord..."),
+            Err(e) => crate::warn!("{e}"),
+        },
     }
     done(result.is_ok(), interactive)
 }
